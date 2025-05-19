@@ -1,6 +1,7 @@
 services:
   gitlab:
     image: gitlab/gitlab-ce:latest
+    container_name: gitlab_rrkts
     restart: always
     hostname: '10.96.20.57'
     environment:
@@ -9,6 +10,27 @@ services:
         nginx['ssl_certificate'] = "/etc/gitlab/ssl/gitlab.crt"
         nginx['ssl_certificate_key'] = "/etc/gitlab/ssl/gitlab.key"
         gitlab_rails['gitlab_shell_ssh_port'] = 2224
+
+        # CPU optimization for 8 cores
+        # Following N+1 rule for Puma workers
+        puma['worker_processes'] = 9
+        puma['max_threads'] = 5
+        puma['min_threads'] = 2
+        puma['worker_timeout'] = 60
+
+        # Sidekiq thread optimization
+        sidekiq['concurrency'] = 10
+        sidekiq['max_concurrency'] = 15
+        sidekiq['min_concurrency'] = 5
+
+        # PostgreSQL optimization for 8 cores
+        postgresql['max_worker_processes'] = 8
+        postgresql['max_parallel_workers'] = 4
+        postgresql['max_parallel_workers_per_gather'] = 2
+        postgresql['effective_cache_size'] = '2GB'
+        postgresql['shared_buffers'] = '1GB'
+        postgresql['work_mem'] = '64MB'
+
     ports:
       - 8080:8080
       - 9443:9443
@@ -18,7 +40,16 @@ services:
       - ./logs:/var/log/gitlab
       - ./data:/var/opt/gitlab
       - ./ssl:/etc/gitlab/ssl
-    shm_size: '256m'
+    shm_size: '512m'
+    # Explicitly allocate CPU resources
+    deploy:
+      resources:
+        limits:
+          cpus: '8'
+          memory: 8G
+        reservations:
+          cpus: '4'
+          memory: 4G
     networks:
       - network_test
 networks:
